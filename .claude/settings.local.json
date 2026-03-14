@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(flutter doctor -v)",
+      "Bash(flutter clean)",
+      "Bash(flutter pub get)",
+      "Bash(reg query \"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\AppModelUnlock\" /v AllowDevelopmentWithoutDevLicense)",
+      "Bash(powershell.exe -Command \"Get-ItemProperty -Path ''HKLM:\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\AppModelUnlock'' -Name ''AllowDevelopmentWithoutDevLicense'' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty AllowDevelopmentWithoutDevLicense\")",
+      "Bash(flutter build appbundle --release)",
+      "Bash(\"C:/Users/dell/AppData/Local/Android/sdk/cmdline-tools/latest/bin/sdkmanager.bat\" --list)",
+      "Bash(echo \"Done: $?\")",
+      "Bash(dart pub add image --dev)",
+      "Bash(dart run tool/generate_icon.dart)",
+      "Bash(dart pub add flutter_launcher_icons --dev)",
+      "Bash(dart run flutter_launcher_icons)",
+      "Bash(dart pub add flutter_native_splash --dev)",
+      "Bash(dart run flutter_native_splash:create)",
+      "Bash(jarsigner -verify -verbose -certs \"C:/Users/dell/Downloads/infinite_brain_challenge/build/app/outputs/bundle/release/app-release.aab\")",
+      "Bash(flutter build ios --release --no-codesign)",
+      "Bash(flutter build ios --no-codesign)",
+      "Bash(flutter build ios -h)"
+    ]
+  }
+}
