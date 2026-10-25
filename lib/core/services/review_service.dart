@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+import 'package:in_app_review/in_app_review.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Manages in-app review prompts.
@@ -74,13 +76,32 @@ class ReviewService {
     await _prefs.setBool(_hasReviewedKey, true);
   }
 
-  /// Show the review dialog
-  /// TODO: Implement with in_app_review package
+  /// Show the native in-app review dialog (Google Play).
   Future<void> requestReview() async {
-    // final inAppReview = InAppReview.instance;
-    // if (await inAppReview.isAvailable()) {
-    //   inAppReview.requestReview();
-    // }
     await recordPromptShown();
+    try {
+      final inAppReview = InAppReview.instance;
+      if (await inAppReview.isAvailable()) {
+        await inAppReview.requestReview();
+        // If the user completes the review, mark recorded.
+        // (Google doesn't tell us if they actually rated — treat prompt as success.)
+        await recordReviewed();
+      }
+    } catch (e) {
+      debugPrint('ReviewService: requestReview failed: $e');
+    }
+  }
+
+  /// Opens the Play Store listing for a manual review.
+  Future<void> openStoreListing() async {
+    try {
+      final inAppReview = InAppReview.instance;
+      await inAppReview.openStoreListing(
+        appStoreId: null,
+        microsoftStoreId: null,
+      );
+    } catch (e) {
+      debugPrint('ReviewService: openStoreListing failed: $e');
+    }
   }
 }

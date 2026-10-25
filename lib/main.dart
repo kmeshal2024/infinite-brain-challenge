@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme/app_theme.dart';
+import 'core/services/audio_service.dart';
+import 'core/services/ad_service.dart';
+import 'core/services/review_service.dart';
+import 'core/providers/app_providers.dart';
 import 'routing/app_router.dart';
 
 void main() async {
@@ -20,9 +24,26 @@ void main() async {
     systemNavigationBarIconBrightness: Brightness.light,
   ));
 
+  // Initialize audio service
+  final audioService = AudioService();
+  await audioService.init();
+
+  // Initialize AppLovin MAX ads
+  final adService = AdService();
+  await adService.init();
+
+  // Initialize review service (tracks in-app review eligibility)
+  final reviewService = ReviewService();
+  await reviewService.init();
+
   runApp(
-    const ProviderScope(
-      child: InfiniteBrainApp(),
+    ProviderScope(
+      overrides: [
+        audioServiceProvider.overrideWithValue(audioService),
+        adServiceProvider.overrideWithValue(adService),
+        reviewServiceProvider.overrideWithValue(reviewService),
+      ],
+      child: const InfiniteBrainApp(),
     ),
   );
 }
