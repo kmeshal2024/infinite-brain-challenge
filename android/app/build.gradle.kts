@@ -29,8 +29,9 @@ android {
 
     defaultConfig {
         applicationId = "com.infinitebrain.infinite_brain_challenge"
-        // AppLovin MAX requires minSdk 23
-        minSdk = 23
+        // Google Play Protect (automatic protection / signing) requires minSdk 24.
+        // AppLovin MAX only needs 23, so 24 satisfies both.
+        minSdk = 24
         targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
