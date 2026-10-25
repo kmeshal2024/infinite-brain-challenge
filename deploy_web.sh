@@ -57,6 +57,6 @@ git checkout "$CURRENT_BRANCH"
 
 echo ""
 echo "=== Deployment complete! ==="
-echo "GitHub Pages URL: https://YOUR-USERNAME.github.io/infinite-brain-challenge/"
+echo "GitHub Pages URL: https://kmeshal2024.github.io/infinite-brain-challenge/"
 echo ""
 echo "Make sure GitHub Pages is configured to deploy from 'gh-pages' branch in repo Settings."

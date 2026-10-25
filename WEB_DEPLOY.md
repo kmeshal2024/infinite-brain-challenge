@@ -20,8 +20,8 @@
 ```bash
 cd C:\Users\dell\Downloads\infinite_brain_challenge
 
-# Add your GitHub remote (replace YOUR-USERNAME)
-git remote add origin https://github.com/YOUR-USERNAME/infinite-brain-challenge.git
+# Add your GitHub remote (replace kmeshal2024)
+git remote add origin https://github.com/kmeshal2024/infinite-brain-challenge.git
 
 # Push source code
 git push -u origin main
@@ -44,7 +44,7 @@ git push origin gh-pages
 
 ## Your Live URL
 ```
-https://YOUR-USERNAME.github.io/infinite-brain-challenge/
+https://kmeshal2024.github.io/infinite-brain-challenge/
 ```
 
 ---
