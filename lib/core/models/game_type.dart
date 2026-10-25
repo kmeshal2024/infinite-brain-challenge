@@ -7,8 +7,12 @@ enum GameType {
   numberSequence,
   oddOneOut,
   reactionSpeed,
-  shapeLogic,     // future
-  quickMath,      // future
+  shapeLogic,
+  quickMath,
+  wordMemory,
+  colorMatch,
+  mathPuzzle24,
+  chimpTest,
 }
 
 /// Static metadata for each game type
@@ -96,8 +100,8 @@ class GameInfo {
       type: GameType.shapeLogic,
       id: 'shape_logic',
       name: 'Shape Logic',
-      description: 'Solve visual logic puzzles with shapes. Coming soon!',
-      shortDescription: 'Coming soon',
+      description: 'Complete shape patterns by finding what comes next. Tests your visual logic.',
+      shortDescription: 'Complete the pattern',
       icon: Icons.category_rounded,
       color: AppColors.puzzleColor,
       gradient: const LinearGradient(
@@ -105,14 +109,13 @@ class GameInfo {
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       ),
-      isAvailable: false,
     ),
     GameInfo(
       type: GameType.quickMath,
       id: 'quick_math',
       name: 'Quick Math',
-      description: 'Solve math problems under time pressure. Coming soon!',
-      shortDescription: 'Coming soon',
+      description: 'Solve math problems under time pressure. Tests your arithmetic speed.',
+      shortDescription: 'Solve fast!',
       icon: Icons.calculate_rounded,
       color: AppColors.mathColor,
       gradient: const LinearGradient(
@@ -120,7 +123,62 @@ class GameInfo {
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       ),
-      isAvailable: false,
+    ),
+    GameInfo(
+      type: GameType.wordMemory,
+      id: 'word_memory',
+      name: 'Word Memory',
+      description: 'Memorize a list of words, then pick them out from decoys. Tests your verbal memory.',
+      shortDescription: 'Remember the words',
+      icon: Icons.menu_book_rounded,
+      color: AppColors.memoryColor,
+      gradient: const LinearGradient(
+        colors: [Color(0xFF60A5FA), Color(0xFF2563EB)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+    ),
+    GameInfo(
+      type: GameType.colorMatch,
+      id: 'color_match',
+      name: 'Color Match',
+      description: 'Does the word match the ink color? A classic Stroop test for your focus.',
+      shortDescription: 'Focus under pressure',
+      icon: Icons.palette_rounded,
+      color: AppColors.speedColor,
+      gradient: const LinearGradient(
+        colors: [Color(0xFFF472B6), Color(0xFFDB2777)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+    ),
+    GameInfo(
+      type: GameType.mathPuzzle24,
+      id: 'math_puzzle_24',
+      name: 'Math 24',
+      description: 'Use all 4 numbers with + − × ÷ to reach 24. Tests your math creativity.',
+      shortDescription: 'Reach 24!',
+      icon: Icons.extension_rounded,
+      color: AppColors.mathColor,
+      gradient: const LinearGradient(
+        colors: [Color(0xFFFBBF24), Color(0xFFD97706)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+    ),
+    GameInfo(
+      type: GameType.chimpTest,
+      id: 'chimp_test',
+      name: 'Chimp Test',
+      description: 'Memorize number positions on a grid, then tap them in order. Tests your working memory.',
+      shortDescription: 'Tap in order 1 → N',
+      icon: Icons.psychology_alt_rounded,
+      color: AppColors.memoryColor,
+      gradient: const LinearGradient(
+        colors: [Color(0xFF34D399), Color(0xFF059669)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
     ),
   ];
 

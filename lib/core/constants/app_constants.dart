@@ -21,6 +21,11 @@ class GameConstants {
   static const int patternMemoryShowDurationMs = 800;
   static const int patternMemoryHideDurationMs = 300;
 
+  // Chimp Test (number-position working memory)
+  static const int chimpTestStartCount = 4;
+  static const int chimpTestMaxCount = 15;
+  static const int chimpTestPreviewMs = 2500;
+
   // Number Sequence
   static const int numberSequenceChoiceCount = 4;
   static const int numberSequenceStartDifficulty = 1;

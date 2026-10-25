@@ -15,8 +15,8 @@ plugins {
 
 android {
     namespace = "com.infinitebrain.infinite_brain_challenge"
-    compileSdk = flutter.compileSdkVersion
-    
+    // Android 16 (API 36) required by Google Play as of Nov 2026.
+    compileSdk = 36
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -29,8 +29,9 @@ android {
 
     defaultConfig {
         applicationId = "com.infinitebrain.infinite_brain_challenge"
-        minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+        // AppLovin MAX requires minSdk 23
+        minSdk = 23
+        targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }

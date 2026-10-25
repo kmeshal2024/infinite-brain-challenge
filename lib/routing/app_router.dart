@@ -19,6 +19,12 @@ import '../games/pattern_memory/pattern_memory_screen.dart';
 import '../games/number_sequence/number_sequence_screen.dart';
 import '../games/odd_one_out/odd_one_out_screen.dart';
 import '../games/reaction_speed/reaction_speed_screen.dart';
+import '../games/quick_math/quick_math_screen.dart';
+import '../games/shape_logic/shape_logic_screen.dart';
+import '../games/word_memory/word_memory_screen.dart';
+import '../games/color_match/color_match_screen.dart';
+import '../games/math_puzzle_24/math_puzzle_24_screen.dart';
+import '../games/chimp_test/chimp_test_screen.dart';
 
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -115,6 +121,18 @@ Widget _buildGameScreen(String gameId, int level) {
       return OddOneOutScreen(level: level);
     case 'reaction_speed':
       return ReactionSpeedScreen(level: level);
+    case 'quick_math':
+      return QuickMathScreen(level: level);
+    case 'shape_logic':
+      return ShapeLogicScreen(level: level);
+    case 'word_memory':
+      return WordMemoryScreen(level: level);
+    case 'color_match':
+      return ColorMatchScreen(level: level);
+    case 'math_puzzle_24':
+      return MathPuzzle24Screen(level: level);
+    case 'chimp_test':
+      return ChimpTestScreen(level: level);
     default:
       return PatternMemoryScreen(level: level);
   }
