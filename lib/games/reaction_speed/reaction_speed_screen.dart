@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/constants/app_constants.dart';
@@ -56,6 +57,7 @@ class _ReactionSpeedScreenState extends ConsumerState<ReactionSpeedScreen>
   }
 
   void _startGame() {
+    ref.read(audioServiceProvider).playGameStart();
     resetGameState();
     startTimer();
     _currentRound = 0;
@@ -65,6 +67,7 @@ class _ReactionSpeedScreenState extends ConsumerState<ReactionSpeedScreen>
 
   void _startRound() {
     setState(() => _state = ReactionState.waiting);
+    ref.read(audioServiceProvider).playCountdown();
 
     final rng = Random();
     final delay = GameConstants.reactionSpeedMinDelayMs +
@@ -76,14 +79,17 @@ class _ReactionSpeedScreenState extends ConsumerState<ReactionSpeedScreen>
     _delayTimer = Timer(Duration(milliseconds: delay), () {
       if (!mounted) return;
       _signalTime = DateTime.now();
+      ref.read(audioServiceProvider).playTap();
       setState(() => _state = ReactionState.ready);
     });
   }
 
   void _onTap() {
+    final audio = ref.read(audioServiceProvider);
+
     if (_state == ReactionState.waiting) {
-      // Tapped too early
       _delayTimer?.cancel();
+      audio.playWrong();
       setState(() => _state = ReactionState.tooEarly);
       Future.delayed(const Duration(seconds: 1), () {
         if (mounted) _startRound();
@@ -96,7 +102,12 @@ class _ReactionSpeedScreenState extends ConsumerState<ReactionSpeedScreen>
       _reactionTimes.add(_reactionMs);
       recordAnswer(true);
 
-      // Score based on speed
+      if (_reactionMs <= GameConstants.reactionSpeedExcellentMs) {
+        audio.playSuccess();
+      } else {
+        audio.playCorrect();
+      }
+
       int points;
       if (_reactionMs <= GameConstants.reactionSpeedExcellentMs) {
         points = 30;
@@ -130,7 +141,6 @@ class _ReactionSpeedScreenState extends ConsumerState<ReactionSpeedScreen>
         ? 999
         : _reactionTimes.reduce((a, b) => a + b) ~/ _reactionTimes.length;
 
-    // Calculate stars based on average reaction time
     int stars;
     if (avgReaction <= GameConstants.reactionSpeedExcellentMs) {
       stars = 3;
@@ -149,6 +159,13 @@ class _ReactionSpeedScreenState extends ConsumerState<ReactionSpeedScreen>
         : isWin
             ? GameConstants.coinsPerLevelComplete
             : 0;
+
+    final audio = ref.read(audioServiceProvider);
+    if (isWin) {
+      audio.playSuccess();
+    } else {
+      audio.playFail();
+    }
 
     final result = GameResult(
       gameType: GameType.reactionSpeed,
@@ -205,8 +222,6 @@ class _ReactionSpeedScreenState extends ConsumerState<ReactionSpeedScreen>
 
   @override
   Widget build(BuildContext context) {
-    final player = ref.watch(playerDataProvider);
-
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Container(
@@ -255,22 +270,23 @@ class _ReactionSpeedScreenState extends ConsumerState<ReactionSpeedScreen>
               ),
               child: const Icon(Icons.bolt_rounded,
                   color: Colors.white, size: 40),
-            ),
+            ).animate().scale(duration: 600.ms, curve: Curves.elasticOut),
             const SizedBox(height: AppSpacing.xxxl),
             Text('Level ${widget.level}',
-                style: AppTypography.displaySmall),
+                style: AppTypography.displaySmall)
+                .animate().fadeIn(delay: 200.ms).slideY(begin: 0.2),
             const SizedBox(height: AppSpacing.md),
             Text(
               'Tap the screen as fast as you can\nwhen the color changes to green!',
               style: AppTypography.bodyLarge
                   .copyWith(color: AppColors.textSecondary),
               textAlign: TextAlign.center,
-            ),
+            ).animate().fadeIn(delay: 400.ms),
             const SizedBox(height: AppSpacing.sm),
             Text(
               '$_totalRounds rounds',
               style: AppTypography.bodyMedium,
-            ),
+            ).animate().fadeIn(delay: 500.ms),
             const SizedBox(height: AppSpacing.huge),
             GameButton(
               label: 'Start',
@@ -280,7 +296,7 @@ class _ReactionSpeedScreenState extends ConsumerState<ReactionSpeedScreen>
               ),
               onTap: _startGame,
               width: 200,
-            ),
+            ).animate().fadeIn(delay: 600.ms).scale(begin: const Offset(0.8, 0.8)),
           ],
         ),
       ),
@@ -325,26 +341,49 @@ class _ReactionSpeedScreenState extends ConsumerState<ReactionSpeedScreen>
         decoration: BoxDecoration(
           color: bgColor,
           borderRadius: AppRadius.xxlAll,
+          boxShadow: _state == ReactionState.ready
+              ? [
+                  BoxShadow(
+                    color: AppColors.success.withOpacity(0.4),
+                    blurRadius: 30,
+                    spreadRadius: 5,
+                  ),
+                ]
+              : null,
         ),
         child: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               if (_state == ReactionState.ready)
-                Icon(Icons.bolt_rounded, color: Colors.white, size: 64),
+                const Icon(Icons.bolt_rounded, color: Colors.white, size: 64)
+                    .animate(onPlay: (c) => c.repeat(reverse: true))
+                    .scale(
+                      begin: const Offset(0.9, 0.9),
+                      end: const Offset(1.2, 1.2),
+                      duration: 300.ms,
+                    ),
               if (_state == ReactionState.tapped)
-                Icon(Icons.check_circle_rounded,
-                    color: Colors.white, size: 48),
+                const Icon(Icons.check_circle_rounded,
+                    color: Colors.white, size: 48)
+                    .animate()
+                    .scale(
+                      begin: const Offset(0.5, 0.5),
+                      duration: 400.ms,
+                      curve: Curves.elasticOut,
+                    ),
               if (_state == ReactionState.tooEarly)
-                Icon(Icons.warning_rounded,
-                    color: Colors.white, size: 48),
+                const Icon(Icons.warning_rounded,
+                    color: Colors.white, size: 48)
+                    .animate()
+                    .shake(duration: 400.ms),
               const SizedBox(height: AppSpacing.lg),
               Text(
                 statusText,
                 style: AppTypography.displayMedium.copyWith(
                   color: Colors.white,
                 ),
-              ),
+              ).animate().fadeIn(duration: 200.ms),
               if (subText.isNotEmpty) ...[
                 const SizedBox(height: AppSpacing.sm),
                 Text(
@@ -362,9 +401,9 @@ class _ReactionSpeedScreenState extends ConsumerState<ReactionSpeedScreen>
   }
 
   String _getReactionRating(int ms) {
-    if (ms <= GameConstants.reactionSpeedExcellentMs) return '⚡ Lightning Fast!';
-    if (ms <= GameConstants.reactionSpeedGoodMs) return '🔥 Great!';
-    if (ms <= GameConstants.reactionSpeedOkMs) return '👍 Good';
-    return '🐌 Keep practicing!';
+    if (ms <= GameConstants.reactionSpeedExcellentMs) return 'Lightning Fast!';
+    if (ms <= GameConstants.reactionSpeedGoodMs) return 'Great!';
+    if (ms <= GameConstants.reactionSpeedOkMs) return 'Good';
+    return 'Keep practicing!';
   }
 }

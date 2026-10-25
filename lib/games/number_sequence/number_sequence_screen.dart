@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/models/game_type.dart';
@@ -22,7 +23,7 @@ class NumberSequenceScreen extends ConsumerStatefulWidget {
 }
 
 class _NumberSequenceScreenState extends ConsumerState<NumberSequenceScreen>
-    with MiniGameController {
+    with MiniGameController, SingleTickerProviderStateMixin {
   static const String gameId = 'number_sequence';
 
   bool _started = false;
@@ -35,6 +36,9 @@ class _NumberSequenceScreenState extends ConsumerState<NumberSequenceScreen>
   int _currentRound = 0;
   late int _totalRounds;
 
+  // Shake animation
+  late AnimationController _shakeController;
+
   @override
   void initState() {
     super.initState();
@@ -44,9 +48,20 @@ class _NumberSequenceScreenState extends ConsumerState<NumberSequenceScreen>
       maxValue: 8,
       rate: 0.3,
     );
+    _shakeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
+  }
+
+  @override
+  void dispose() {
+    _shakeController.dispose();
+    super.dispose();
   }
 
   void _start() {
+    ref.read(audioServiceProvider).playGameStart();
     resetGameState();
     startTimer();
     _currentRound = 0;
@@ -64,15 +79,12 @@ class _NumberSequenceScreenState extends ConsumerState<NumberSequenceScreen>
       rate: 0.2,
     );
 
-    // Generate sequence types based on difficulty
     List<int> fullSequence;
     if (difficulty <= 5) {
-      // Simple arithmetic: add constant
       final start = rng.nextInt(10) + 1;
       final step = rng.nextInt(4) + 1;
       fullSequence = List.generate(seqLength, (i) => start + step * i);
     } else if (difficulty <= 15) {
-      // Multiply or mixed
       if (rng.nextBool()) {
         final start = rng.nextInt(5) + 1;
         final multiplier = rng.nextInt(3) + 2;
@@ -83,14 +95,11 @@ class _NumberSequenceScreenState extends ConsumerState<NumberSequenceScreen>
         fullSequence = List.generate(seqLength, (i) => start + step * i);
       }
     } else {
-      // Complex: squares, fibonacci-like, alternating
       final type = rng.nextInt(3);
       if (type == 0) {
-        // Squares
         final offset = rng.nextInt(5);
         fullSequence = List.generate(seqLength, (i) => (i + offset + 1) * (i + offset + 1));
       } else if (type == 1) {
-        // Fibonacci-like
         int a = rng.nextInt(5) + 1;
         int b = rng.nextInt(5) + 1;
         fullSequence = [a, b];
@@ -98,7 +107,6 @@ class _NumberSequenceScreenState extends ConsumerState<NumberSequenceScreen>
           fullSequence.add(fullSequence[i - 1] + fullSequence[i - 2]);
         }
       } else {
-        // Alternating add/subtract
         final start = rng.nextInt(20) + 10;
         final step1 = rng.nextInt(5) + 2;
         final step2 = rng.nextInt(3) + 1;
@@ -111,15 +119,12 @@ class _NumberSequenceScreenState extends ConsumerState<NumberSequenceScreen>
       }
     }
 
-    // Pick missing index (not first or last for easier reasoning)
     _missingIndex = 1 + rng.nextInt(seqLength - 2);
     _correctAnswer = fullSequence[_missingIndex];
 
-    // Build display sequence with null for missing
     _sequence = fullSequence.map<int?>((e) => e).toList();
     _sequence[_missingIndex] = null;
 
-    // Generate wrong answers
     final wrongAnswers = <int>{};
     while (wrongAnswers.length < 3) {
       final offset = (rng.nextInt(10) + 1) * (rng.nextBool() ? 1 : -1);
@@ -138,9 +143,17 @@ class _NumberSequenceScreenState extends ConsumerState<NumberSequenceScreen>
   void _selectAnswer(int answer) {
     if (_selectedAnswer != null) return;
 
+    final audio = ref.read(audioServiceProvider);
     final correct = answer == _correctAnswer;
     recordAnswer(correct);
     addScore(correct ? 20 : 0);
+
+    if (correct) {
+      audio.playCorrect();
+    } else {
+      audio.playWrong();
+      _shakeController.forward(from: 0);
+    }
 
     setState(() {
       _selectedAnswer = answer;
@@ -159,6 +172,13 @@ class _NumberSequenceScreenState extends ConsumerState<NumberSequenceScreen>
   }
 
   void _finishGame(bool isWin) {
+    final audio = ref.read(audioServiceProvider);
+    if (isWin) {
+      audio.playSuccess();
+    } else {
+      audio.playFail();
+    }
+
     final result = buildResult(
       gameType: GameType.numberSequence,
       gameId: gameId,
@@ -250,17 +270,18 @@ class _NumberSequenceScreenState extends ConsumerState<NumberSequenceScreen>
               ),
               child: const Icon(Icons.tag_rounded,
                   color: Colors.white, size: 40),
-            ),
+            ).animate().scale(duration: 600.ms, curve: Curves.elasticOut),
             const SizedBox(height: AppSpacing.xxxl),
             Text('Level ${widget.level}',
-                style: AppTypography.displaySmall),
+                style: AppTypography.displaySmall)
+                .animate().fadeIn(delay: 200.ms).slideY(begin: 0.2),
             const SizedBox(height: AppSpacing.md),
             Text(
               'Find the missing number in $_totalRounds sequences',
               style: AppTypography.bodyLarge
                   .copyWith(color: AppColors.textSecondary),
               textAlign: TextAlign.center,
-            ),
+            ).animate().fadeIn(delay: 400.ms),
             const SizedBox(height: AppSpacing.huge),
             GameButton(
               label: 'Start',
@@ -270,7 +291,7 @@ class _NumberSequenceScreenState extends ConsumerState<NumberSequenceScreen>
               ),
               onTap: _start,
               width: 200,
-            ),
+            ).animate().fadeIn(delay: 600.ms).scale(begin: const Offset(0.8, 0.8)),
           ],
         ),
       ),
@@ -278,108 +299,129 @@ class _NumberSequenceScreenState extends ConsumerState<NumberSequenceScreen>
   }
 
   Widget _buildGameplay() {
-    return Padding(
-      padding: const EdgeInsets.all(AppSpacing.xxl),
-      child: Column(
-        children: [
-          // Round indicator
-          Text(
-            'Round ${_currentRound + 1} of $_totalRounds',
-            style: AppTypography.labelLarge.copyWith(
-              color: AppColors.textSecondary,
+    return AnimatedBuilder(
+      animation: _shakeController,
+      builder: (context, child) {
+        final shake = sin(_shakeController.value * pi * 4) * 8 *
+            (1 - _shakeController.value);
+        return Transform.translate(
+          offset: Offset(shake, 0),
+          child: child,
+        );
+      },
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.xxl),
+        child: Column(
+          children: [
+            Text(
+              'Round ${_currentRound + 1} of $_totalRounds',
+              style: AppTypography.labelLarge.copyWith(
+                color: AppColors.textSecondary,
+              ),
             ),
-          ),
-          const SizedBox(height: AppSpacing.xxxl),
-          // Sequence display
-          Text('Find the missing number',
-              style: AppTypography.headingMedium),
-          const SizedBox(height: AppSpacing.xxl),
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.sm,
-            alignment: WrapAlignment.center,
-            children: _sequence.map((num) {
-              final isMissing = num == null;
-              return Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: isMissing
-                      ? AppColors.logicColor.withOpacity(0.15)
-                      : AppColors.surfaceCard,
-                  borderRadius: AppRadius.mdAll,
-                  border: Border.all(
-                    color: isMissing
-                        ? AppColors.logicColor
-                        : AppColors.surfaceElevated,
-                    width: isMissing ? 2 : 1,
-                  ),
-                ),
-                child: Center(
-                  child: isMissing
-                      ? const Icon(Icons.help_outline_rounded,
-                          color: AppColors.logicColor, size: 24)
-                      : Text(
-                          '$num',
-                          style: AppTypography.headingMedium,
-                        ),
-                ),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: AppSpacing.huge),
-          // Choices
-          GridView.count(
-            shrinkWrap: true,
-            crossAxisCount: 2,
-            mainAxisSpacing: AppSpacing.md,
-            crossAxisSpacing: AppSpacing.md,
-            childAspectRatio: 2.5,
-            physics: const NeverScrollableScrollPhysics(),
-            children: _choices.map((choice) {
-              final isSelected = _selectedAnswer == choice;
-              final isCorrectChoice = choice == _correctAnswer;
-              final showResult = _selectedAnswer != null;
-
-              Color bg;
-              Color border;
-              if (showResult && isCorrectChoice) {
-                bg = AppColors.success.withOpacity(0.2);
-                border = AppColors.success;
-              } else if (showResult && isSelected && !_isCorrect) {
-                bg = AppColors.error.withOpacity(0.2);
-                border = AppColors.error;
-              } else {
-                bg = AppColors.surfaceCard;
-                border = AppColors.surfaceElevated;
-              }
-
-              return GestureDetector(
-                onTap: () => _selectAnswer(choice),
-                child: AnimatedContainer(
-                  duration: AppDurations.normal,
+            const SizedBox(height: AppSpacing.xxxl),
+            Text('Find the missing number',
+                style: AppTypography.headingMedium),
+            const SizedBox(height: AppSpacing.xxl),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              alignment: WrapAlignment.center,
+              children: _sequence.asMap().entries.map((entry) {
+                final i = entry.key;
+                final num = entry.value;
+                final isMissing = num == null;
+                return Container(
+                  width: 56,
+                  height: 56,
                   decoration: BoxDecoration(
-                    color: bg,
-                    borderRadius: AppRadius.lgAll,
-                    border: Border.all(color: border, width: 1.5),
+                    color: isMissing
+                        ? AppColors.logicColor.withOpacity(0.15)
+                        : AppColors.surfaceCard,
+                    borderRadius: AppRadius.mdAll,
+                    border: Border.all(
+                      color: isMissing
+                          ? AppColors.logicColor
+                          : AppColors.surfaceElevated,
+                      width: isMissing ? 2 : 1,
+                    ),
                   ),
                   child: Center(
-                    child: Text(
-                      '$choice',
-                      style: AppTypography.headingLarge.copyWith(
-                        color: showResult && isCorrectChoice
-                            ? AppColors.success
-                            : showResult && isSelected
-                                ? AppColors.error
-                                : AppColors.textPrimary,
+                    child: isMissing
+                        ? const Icon(Icons.help_outline_rounded,
+                            color: AppColors.logicColor, size: 24)
+                            .animate(onPlay: (c) => c.repeat(reverse: true))
+                            .scale(
+                              begin: const Offset(0.9, 0.9),
+                              end: const Offset(1.1, 1.1),
+                              duration: 800.ms,
+                            )
+                        : Text(
+                            '$num',
+                            style: AppTypography.headingMedium,
+                          ),
+                  ),
+                ).animate().fadeIn(delay: (i * 80).ms).slideX(begin: 0.2);
+              }).toList(),
+            ),
+            const SizedBox(height: AppSpacing.huge),
+            GridView.count(
+              shrinkWrap: true,
+              crossAxisCount: 2,
+              mainAxisSpacing: AppSpacing.md,
+              crossAxisSpacing: AppSpacing.md,
+              childAspectRatio: 2.5,
+              physics: const NeverScrollableScrollPhysics(),
+              children: _choices.asMap().entries.map((entry) {
+                final i = entry.key;
+                final choice = entry.value;
+                final isSelected = _selectedAnswer == choice;
+                final isCorrectChoice = choice == _correctAnswer;
+                final showResult = _selectedAnswer != null;
+
+                Color bg;
+                Color border;
+                if (showResult && isCorrectChoice) {
+                  bg = AppColors.success.withOpacity(0.2);
+                  border = AppColors.success;
+                } else if (showResult && isSelected && !_isCorrect) {
+                  bg = AppColors.error.withOpacity(0.2);
+                  border = AppColors.error;
+                } else {
+                  bg = AppColors.surfaceCard;
+                  border = AppColors.surfaceElevated;
+                }
+
+                return GestureDetector(
+                  onTap: () => _selectAnswer(choice),
+                  child: AnimatedContainer(
+                    duration: AppDurations.normal,
+                    decoration: BoxDecoration(
+                      color: bg,
+                      borderRadius: AppRadius.lgAll,
+                      border: Border.all(color: border, width: 1.5),
+                    ),
+                    child: Center(
+                      child: Text(
+                        '$choice',
+                        style: AppTypography.headingLarge.copyWith(
+                          color: showResult && isCorrectChoice
+                              ? AppColors.success
+                              : showResult && isSelected
+                                  ? AppColors.error
+                                  : AppColors.textPrimary,
+                        ),
                       ),
                     ),
                   ),
-                ),
-              );
-            }).toList(),
-          ),
-        ],
+                ).animate().fadeIn(delay: (i * 100 + 300).ms).scale(
+                    begin: const Offset(0.9, 0.9),
+                    duration: 300.ms,
+                  );
+              }).toList(),
+            ),
+          ],
+        ),
       ),
     );
   }

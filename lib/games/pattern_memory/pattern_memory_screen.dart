@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/constants/app_constants.dart';
@@ -45,6 +46,10 @@ class _PatternMemoryScreenState extends ConsumerState<PatternMemoryScreen>
   late Animation<double> _pulseAnimation;
   late AnimationController _feedbackController;
 
+  // Shake animation for wrong answers
+  late AnimationController _shakeController;
+  late Animation<double> _shakeAnimation;
+
   Timer? _showTimer;
 
   @override
@@ -70,6 +75,14 @@ class _PatternMemoryScreenState extends ConsumerState<PatternMemoryScreen>
       vsync: this,
       duration: const Duration(milliseconds: 300),
     );
+
+    _shakeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
+    _shakeAnimation = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(parent: _shakeController, curve: Curves.elasticIn),
+    );
   }
 
   @override
@@ -77,10 +90,14 @@ class _PatternMemoryScreenState extends ConsumerState<PatternMemoryScreen>
     _showTimer?.cancel();
     _pulseController.dispose();
     _feedbackController.dispose();
+    _shakeController.dispose();
     super.dispose();
   }
 
   void _startGame() {
+    final audio = ref.read(audioServiceProvider);
+    audio.playGameStart();
+
     resetGameState();
     startTimer();
     _generateSequence();
@@ -97,7 +114,6 @@ class _PatternMemoryScreenState extends ConsumerState<PatternMemoryScreen>
     _sequence = [];
     while (_sequence.length < _sequenceLength) {
       final cell = random.nextInt(gridSize);
-      // Avoid consecutive duplicates for clarity
       if (_sequence.isEmpty || _sequence.last != cell) {
         _sequence.add(cell);
       }
@@ -106,12 +122,10 @@ class _PatternMemoryScreenState extends ConsumerState<PatternMemoryScreen>
 
   void _showSequence() {
     if (_currentShowIndex >= _sequence.length) {
-      // Done showing
       setState(() {
         _activeCell = -1;
         _gameState = PatternGameState.hiding;
       });
-      // Brief pause before input phase
       _showTimer = Timer(
         Duration(milliseconds: GameConstants.patternMemoryHideDurationMs),
         () {
@@ -126,13 +140,13 @@ class _PatternMemoryScreenState extends ConsumerState<PatternMemoryScreen>
     setState(() {
       _activeCell = _sequence[_currentShowIndex];
     });
+    ref.read(audioServiceProvider).playTap();
 
     _showTimer = Timer(
       Duration(milliseconds: GameConstants.patternMemoryShowDurationMs),
       () {
         if (!mounted) return;
         setState(() => _activeCell = -1);
-        // Small gap between highlights
         _showTimer = Timer(const Duration(milliseconds: 200), () {
           if (!mounted) return;
           _currentShowIndex++;
@@ -145,6 +159,7 @@ class _PatternMemoryScreenState extends ConsumerState<PatternMemoryScreen>
   void _onCellTap(int index) {
     if (_gameState != PatternGameState.input) return;
 
+    final audio = ref.read(audioServiceProvider);
     final expectedIndex = _playerInput.length;
     final isCorrect = _sequence[expectedIndex] == index;
 
@@ -157,16 +172,23 @@ class _PatternMemoryScreenState extends ConsumerState<PatternMemoryScreen>
 
     recordAnswer(isCorrect);
 
+    if (isCorrect) {
+      audio.playCorrect();
+    } else {
+      audio.playWrong();
+      _shakeController.forward(from: 0);
+    }
+
     _feedbackController.forward(from: 0).then((_) {
       if (!mounted) return;
       setState(() => _showingFeedback = false);
     });
 
     if (!isCorrect) {
-      // Wrong answer - game over
       addScore((_playerInput.length - 1) * 10);
       Future.delayed(const Duration(milliseconds: 400), () {
         if (mounted) {
+          audio.playFail();
           setState(() => _gameState = PatternGameState.failure);
           _submitResult(false);
         }
@@ -174,13 +196,12 @@ class _PatternMemoryScreenState extends ConsumerState<PatternMemoryScreen>
       return;
     }
 
-    // Correct
     addScore(10);
 
     if (_playerInput.length == _sequence.length) {
-      // Completed the sequence!
       Future.delayed(const Duration(milliseconds: 300), () {
         if (mounted) {
+          audio.playSuccess();
           setState(() => _gameState = PatternGameState.success);
           _submitResult(true);
         }
@@ -200,7 +221,6 @@ class _PatternMemoryScreenState extends ConsumerState<PatternMemoryScreen>
       },
     );
 
-    // Save progress
     if (isWin) {
       ref.read(playerDataProvider.notifier).recordGameResult(result);
       ref.read(gameProgressProvider(gameId).notifier).recordLevelResult(
@@ -232,7 +252,7 @@ class _PatternMemoryScreenState extends ConsumerState<PatternMemoryScreen>
     switch (action) {
       case PauseAction.resume:
         if (_gameState == PatternGameState.showing) {
-          _showSequence(); // Resume showing
+          _showSequence();
         }
         break;
       case PauseAction.restart:
@@ -257,7 +277,6 @@ class _PatternMemoryScreenState extends ConsumerState<PatternMemoryScreen>
         decoration: const BoxDecoration(gradient: AppColors.backgroundGradient),
         child: Column(
           children: [
-            // HUD
             GameHUD(
               title: gameInfo.name,
               level: widget.level,
@@ -266,7 +285,6 @@ class _PatternMemoryScreenState extends ConsumerState<PatternMemoryScreen>
               onPause: _handlePause,
               onHint: player.hints > 0 ? _useHint : null,
             ),
-            // Game content
             Expanded(
               child: _buildGameContent(),
             ),
@@ -297,7 +315,6 @@ class _PatternMemoryScreenState extends ConsumerState<PatternMemoryScreen>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Animated icon
           ScaleTransition(
             scale: _pulseAnimation,
             child: Container(
@@ -327,7 +344,7 @@ class _PatternMemoryScreenState extends ConsumerState<PatternMemoryScreen>
           Text(
             'Level ${widget.level}',
             style: AppTypography.displaySmall,
-          ),
+          ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.2, end: 0),
           const SizedBox(height: AppSpacing.md),
           Text(
             'Memorize a sequence of $_sequenceLength tiles',
@@ -335,19 +352,19 @@ class _PatternMemoryScreenState extends ConsumerState<PatternMemoryScreen>
               color: AppColors.textSecondary,
             ),
             textAlign: TextAlign.center,
-          ),
+          ).animate().fadeIn(delay: 200.ms, duration: 400.ms),
           const SizedBox(height: AppSpacing.sm),
           Text(
             'Watch carefully, then repeat!',
             style: AppTypography.bodyMedium,
-          ),
+          ).animate().fadeIn(delay: 400.ms, duration: 400.ms),
           const SizedBox(height: AppSpacing.huge),
           GameButton(
             label: 'Start',
             icon: Icons.play_arrow_rounded,
             onTap: _startGame,
             width: 200,
-          ),
+          ).animate().fadeIn(delay: 600.ms).scale(begin: const Offset(0.8, 0.8)),
         ],
       ),
     );
@@ -364,7 +381,6 @@ class _PatternMemoryScreenState extends ConsumerState<PatternMemoryScreen>
       child: Column(
         children: [
           const SizedBox(height: AppSpacing.xl),
-          // Status text
           AnimatedSwitcher(
             duration: AppDurations.normal,
             child: Text(
@@ -378,7 +394,6 @@ class _PatternMemoryScreenState extends ConsumerState<PatternMemoryScreen>
             ),
           ),
           const SizedBox(height: AppSpacing.md),
-          // Progress bar
           ClipRRect(
             borderRadius: AppRadius.roundAll,
             child: LinearProgressIndicator(
@@ -391,7 +406,6 @@ class _PatternMemoryScreenState extends ConsumerState<PatternMemoryScreen>
             ),
           ),
           const SizedBox(height: AppSpacing.xl),
-          // Sequence counter
           Text(
             isInputPhase
                 ? '${_playerInput.length} / ${_sequence.length}'
@@ -401,12 +415,22 @@ class _PatternMemoryScreenState extends ConsumerState<PatternMemoryScreen>
             ),
           ),
           const SizedBox(height: AppSpacing.xxxl),
-          // Grid
           Expanded(
             child: Center(
-              child: AspectRatio(
-                aspectRatio: 1,
-                child: _buildGrid(isInputPhase),
+              child: AnimatedBuilder(
+                animation: _shakeAnimation,
+                builder: (context, child) {
+                  final shake = sin(_shakeAnimation.value * pi * 4) * 8 *
+                      (1 - _shakeAnimation.value);
+                  return Transform.translate(
+                    offset: Offset(shake, 0),
+                    child: child,
+                  );
+                },
+                child: AspectRatio(
+                  aspectRatio: 1,
+                  child: _buildGrid(isInputPhase),
+                ),
               ),
             ),
           ),
@@ -485,7 +509,12 @@ class _PatternMemoryScreenState extends ConsumerState<PatternMemoryScreen>
                       : Icons.close_rounded,
                   color: _lastTapCorrect ? AppColors.success : AppColors.error,
                   size: 32,
-                )
+                ).animate().scale(
+                    begin: const Offset(0.5, 0.5),
+                    end: const Offset(1.0, 1.0),
+                    duration: 200.ms,
+                    curve: Curves.elasticOut,
+                  )
               : null,
         ),
       ),
@@ -519,19 +548,30 @@ class _PatternMemoryScreenState extends ConsumerState<PatternMemoryScreen>
               color: Colors.white,
               size: 40,
             ),
-          ),
+          )
+              .animate()
+              .scale(
+                begin: const Offset(0.3, 0.3),
+                end: const Offset(1.0, 1.0),
+                duration: 500.ms,
+                curve: Curves.elasticOut,
+              )
+              .shimmer(
+                duration: 1200.ms,
+                color: Colors.white.withOpacity(0.2),
+              ),
           const SizedBox(height: AppSpacing.xl),
           Text(
             isSuccess ? 'Excellent!' : 'Wrong Pattern',
             style: AppTypography.headingLarge,
-          ),
+          ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.3),
           const SizedBox(height: AppSpacing.sm),
           Text(
             isSuccess
                 ? 'You got all $_sequenceLength tiles correct!'
                 : 'You got ${correctAnswers} of ${_sequence.length} correct',
             style: AppTypography.bodyMedium,
-          ),
+          ).animate().fadeIn(delay: 400.ms),
         ],
       ),
     );
@@ -555,7 +595,6 @@ class _PatternMemoryScreenState extends ConsumerState<PatternMemoryScreen>
     final nextIndex = _playerInput.length;
     if (nextIndex < _sequence.length) {
       ref.read(playerDataProvider.notifier).useHint();
-      // Briefly show the next correct cell
       setState(() => _activeCell = _sequence[nextIndex]);
       Future.delayed(const Duration(milliseconds: 500), () {
         if (mounted) setState(() => _activeCell = -1);

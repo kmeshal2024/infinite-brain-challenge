@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/models/game_type.dart';
@@ -21,7 +22,7 @@ class OddOneOutScreen extends ConsumerStatefulWidget {
 }
 
 class _OddOneOutScreenState extends ConsumerState<OddOneOutScreen>
-    with MiniGameController {
+    with MiniGameController, SingleTickerProviderStateMixin {
   static const String gameId = 'odd_one_out';
 
   bool _started = false;
@@ -32,7 +33,6 @@ class _OddOneOutScreenState extends ConsumerState<OddOneOutScreen>
   int? _selectedIndex;
   bool _showResult = false;
 
-  // Visual properties for the current round
   Color _baseColor = Colors.blue;
   Color _oddColor = Colors.red;
   double _baseRotation = 0;
@@ -41,6 +41,9 @@ class _OddOneOutScreenState extends ConsumerState<OddOneOutScreen>
   double _oddSize = 1.0;
   IconData _baseShape = Icons.circle;
   IconData _oddShape = Icons.circle;
+
+  // Shake animation
+  late AnimationController _shakeController;
 
   @override
   void initState() {
@@ -57,12 +60,23 @@ class _OddOneOutScreenState extends ConsumerState<OddOneOutScreen>
       maxValue: 16,
       rate: 0.6,
     );
-    // Ensure grid count makes a nice grid
     final sqRoot = sqrt(_gridCount).ceil();
     _gridCount = sqRoot * sqRoot;
+
+    _shakeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
+  }
+
+  @override
+  void dispose() {
+    _shakeController.dispose();
+    super.dispose();
   }
 
   void _start() {
+    ref.read(audioServiceProvider).playGameStart();
     resetGameState();
     startTimer();
     _currentRound = 0;
@@ -76,17 +90,15 @@ class _OddOneOutScreenState extends ConsumerState<OddOneOutScreen>
     _selectedIndex = null;
     _showResult = false;
 
-    // Available shapes
     const shapes = [
       Icons.circle,
       Icons.square_rounded,
-      Icons.change_history_rounded, // triangle
+      Icons.change_history_rounded,
       Icons.hexagon_rounded,
       Icons.star_rounded,
       Icons.favorite_rounded,
     ];
 
-    // Available colors
     final colors = [
       AppColors.primary,
       AppColors.accent,
@@ -102,18 +114,14 @@ class _OddOneOutScreenState extends ConsumerState<OddOneOutScreen>
     _baseRotation = 0;
     _baseSize = 1.0;
 
-    // The difference depends on difficulty
     if (widget.level <= 5) {
-      // Easy: different color, same shape
       final oddColors = colors.where((c) => c != _baseColor).toList();
       _oddColor = oddColors[rng.nextInt(oddColors.length)];
       _oddShape = _baseShape;
       _oddRotation = _baseRotation;
       _oddSize = _baseSize;
     } else if (widget.level <= 15) {
-      // Medium: subtle color difference or different shape
       if (rng.nextBool()) {
-        // Slightly different shade
         _oddColor = HSLColor.fromColor(_baseColor)
             .withLightness(
               (HSLColor.fromColor(_baseColor).lightness + 0.15).clamp(0.0, 1.0),
@@ -121,7 +129,6 @@ class _OddOneOutScreenState extends ConsumerState<OddOneOutScreen>
             .toColor();
         _oddShape = _baseShape;
       } else {
-        // Different shape, same color
         final oddShapes = shapes.where((s) => s != _baseShape).toList();
         _oddShape = oddShapes[rng.nextInt(oddShapes.length)];
         _oddColor = _baseColor;
@@ -129,7 +136,6 @@ class _OddOneOutScreenState extends ConsumerState<OddOneOutScreen>
       _oddRotation = _baseRotation;
       _oddSize = _baseSize;
     } else {
-      // Hard: very subtle differences
       final diffType = rng.nextInt(3);
       _oddColor = _baseColor;
       _oddShape = _baseShape;
@@ -137,13 +143,13 @@ class _OddOneOutScreenState extends ConsumerState<OddOneOutScreen>
       _oddSize = _baseSize;
 
       switch (diffType) {
-        case 0: // Subtle size
+        case 0:
           _oddSize = _baseSize * (rng.nextBool() ? 0.8 : 1.2);
           break;
-        case 1: // Slight rotation
+        case 1:
           _oddRotation = (rng.nextInt(3) + 1) * 15.0 * pi / 180;
           break;
-        case 2: // Very subtle color
+        case 2:
           _oddColor = HSLColor.fromColor(_baseColor)
               .withLightness(
                 (HSLColor.fromColor(_baseColor).lightness + 0.08)
@@ -160,9 +166,17 @@ class _OddOneOutScreenState extends ConsumerState<OddOneOutScreen>
   void _selectCell(int index) {
     if (_showResult) return;
 
+    final audio = ref.read(audioServiceProvider);
     final correct = index == _oddIndex;
     recordAnswer(correct);
     addScore(correct ? 15 : 0);
+
+    if (correct) {
+      audio.playCorrect();
+    } else {
+      audio.playWrong();
+      _shakeController.forward(from: 0);
+    }
 
     setState(() {
       _selectedIndex = index;
@@ -181,6 +195,13 @@ class _OddOneOutScreenState extends ConsumerState<OddOneOutScreen>
   }
 
   void _finishGame(bool isWin) {
+    final audio = ref.read(audioServiceProvider);
+    if (isWin) {
+      audio.playSuccess();
+    } else {
+      audio.playFail();
+    }
+
     final result = buildResult(
       gameType: GameType.oddOneOut,
       gameId: gameId,
@@ -272,17 +293,18 @@ class _OddOneOutScreenState extends ConsumerState<OddOneOutScreen>
               ),
               child: const Icon(Icons.search_rounded,
                   color: Colors.white, size: 40),
-            ),
+            ).animate().scale(duration: 600.ms, curve: Curves.elasticOut),
             const SizedBox(height: AppSpacing.xxxl),
             Text('Level ${widget.level}',
-                style: AppTypography.displaySmall),
+                style: AppTypography.displaySmall)
+                .animate().fadeIn(delay: 200.ms).slideY(begin: 0.2),
             const SizedBox(height: AppSpacing.md),
             Text(
               'Find the odd one in a grid of $_gridCount items',
               style: AppTypography.bodyLarge
                   .copyWith(color: AppColors.textSecondary),
               textAlign: TextAlign.center,
-            ),
+            ).animate().fadeIn(delay: 400.ms),
             const SizedBox(height: AppSpacing.huge),
             GameButton(
               label: 'Start',
@@ -292,7 +314,7 @@ class _OddOneOutScreenState extends ConsumerState<OddOneOutScreen>
               ),
               onTap: _start,
               width: 200,
-            ),
+            ).animate().fadeIn(delay: 600.ms).scale(begin: const Offset(0.8, 0.8)),
           ],
         ),
       ),
@@ -302,82 +324,104 @@ class _OddOneOutScreenState extends ConsumerState<OddOneOutScreen>
   Widget _buildGameplay() {
     final crossAxisCount = sqrt(_gridCount).ceil();
 
-    return Padding(
-      padding: const EdgeInsets.all(AppSpacing.xl),
-      child: Column(
-        children: [
-          Text(
-            'Round ${_currentRound + 1} of $_totalRounds',
-            style: AppTypography.labelLarge
-                .copyWith(color: AppColors.textSecondary),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Text('Tap the different one!', style: AppTypography.headingMedium),
-          const SizedBox(height: AppSpacing.xxl),
-          Expanded(
-            child: Center(
-              child: AspectRatio(
-                aspectRatio: 1,
-                child: GridView.builder(
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: crossAxisCount,
-                    mainAxisSpacing: AppSpacing.sm,
-                    crossAxisSpacing: AppSpacing.sm,
-                  ),
-                  itemCount: _gridCount,
-                  itemBuilder: (context, index) {
-                    final isOdd = index == _oddIndex;
-                    final isSelected = _selectedIndex == index;
+    return AnimatedBuilder(
+      animation: _shakeController,
+      builder: (context, child) {
+        final shake = sin(_shakeController.value * pi * 4) * 8 *
+            (1 - _shakeController.value);
+        return Transform.translate(
+          offset: Offset(shake, 0),
+          child: child,
+        );
+      },
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: Column(
+          children: [
+            Text(
+              'Round ${_currentRound + 1} of $_totalRounds',
+              style: AppTypography.labelLarge
+                  .copyWith(color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Text('Tap the different one!', style: AppTypography.headingMedium),
+            const SizedBox(height: AppSpacing.xxl),
+            Expanded(
+              child: Center(
+                child: AspectRatio(
+                  aspectRatio: 1,
+                  child: GridView.builder(
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: crossAxisCount,
+                      mainAxisSpacing: AppSpacing.sm,
+                      crossAxisSpacing: AppSpacing.sm,
+                    ),
+                    itemCount: _gridCount,
+                    itemBuilder: (context, index) {
+                      final isOdd = index == _oddIndex;
+                      final isSelected = _selectedIndex == index;
 
-                    Color color = isOdd ? _oddColor : _baseColor;
-                    double rotation = isOdd ? _oddRotation : _baseRotation;
-                    double size = isOdd ? _oddSize : _baseSize;
-                    IconData shape = isOdd ? _oddShape : _baseShape;
+                      Color color = isOdd ? _oddColor : _baseColor;
+                      double rotation = isOdd ? _oddRotation : _baseRotation;
+                      double size = isOdd ? _oddSize : _baseSize;
+                      IconData shape = isOdd ? _oddShape : _baseShape;
 
-                    Color borderColor = AppColors.surfaceElevated;
-                    if (_showResult && isOdd) {
-                      borderColor = AppColors.success;
-                    } else if (_showResult && isSelected && !isOdd) {
-                      borderColor = AppColors.error;
-                    }
+                      Color borderColor = AppColors.surfaceElevated;
+                      if (_showResult && isOdd) {
+                        borderColor = AppColors.success;
+                      } else if (_showResult && isSelected && !isOdd) {
+                        borderColor = AppColors.error;
+                      }
 
-                    return GestureDetector(
-                      onTap: () => _selectCell(index),
-                      child: AnimatedContainer(
-                        duration: AppDurations.normal,
-                        decoration: BoxDecoration(
-                          color: AppColors.surfaceCard,
-                          borderRadius: AppRadius.mdAll,
-                          border: Border.all(
-                            color: borderColor,
-                            width: _showResult &&
-                                    (isOdd || (isSelected && !isOdd))
-                                ? 2
-                                : 0.5,
+                      return GestureDetector(
+                        onTap: () => _selectCell(index),
+                        child: AnimatedContainer(
+                          duration: AppDurations.normal,
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceCard,
+                            borderRadius: AppRadius.mdAll,
+                            border: Border.all(
+                              color: borderColor,
+                              width: _showResult &&
+                                      (isOdd || (isSelected && !isOdd))
+                                  ? 2
+                                  : 0.5,
+                            ),
+                            boxShadow: _showResult && isOdd
+                                ? [
+                                    BoxShadow(
+                                      color: AppColors.success.withOpacity(0.3),
+                                      blurRadius: 8,
+                                    ),
+                                  ]
+                                : null,
                           ),
-                        ),
-                        child: Center(
-                          child: Transform.rotate(
-                            angle: rotation,
-                            child: Transform.scale(
-                              scale: size,
-                              child: Icon(
-                                shape,
-                                color: color,
-                                size: 28,
+                          child: Center(
+                            child: Transform.rotate(
+                              angle: rotation,
+                              child: Transform.scale(
+                                scale: size,
+                                child: Icon(
+                                  shape,
+                                  color: color,
+                                  size: 28,
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                    );
-                  },
+                      ).animate().fadeIn(delay: (index * 30).ms).scale(
+                            begin: const Offset(0.8, 0.8),
+                            duration: 200.ms,
+                          );
+                    },
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
